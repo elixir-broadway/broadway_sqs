@@ -8,16 +8,13 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       MIX_ENV: test
     strategy:
       fail-fast: false
       matrix:
         include:
-          - pair:
-              elixir: "1.10"
-              otp: 22.3
           - pair:
               elixir: 1.14
               otp: 25.3
@@ -30,7 +27,7 @@ jobs:
           otp-version: ${{matrix.pair.otp}}
           elixir-version: ${{matrix.pair.elixir}}
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: |
             deps
