@@ -31,8 +31,13 @@ defmodule BroadwaySQS.Producer do
       and will not redeliver it to any other consumer.
 
     * `:noop` - do not acknowledge the message. SQS will eventually redeliver the message
-    or remove it based on the "Visibility Timeout" and "Max Receive Count"
-    configurations. For more information, see:
+      or remove it based on the "Visibility Timeout" and "Max Receive Count" configurations.
+
+    * `{:nack, timeout}` - change the message visibility timeout to `timeout` seconds
+      (0 to 43_200). The message will become available again for processing after
+      the given amount of time.
+
+    For more information, see:
 
       * ["Visibility Timeout" page on Amazon SQS](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
       * ["Dead Letter Queue" page on Amazon SQS](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)

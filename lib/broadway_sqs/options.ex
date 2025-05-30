@@ -34,7 +34,7 @@ defmodule BroadwaySQS.Options do
         default: 5000
       ],
       on_success: [
-        type: :atom,
+        type: {:custom, __MODULE__, :type_ack_action, [[{:name, :on_success}]]},
         default: :ack,
         doc: """
         configures the acking behaviour for successful messages. See the
@@ -42,7 +42,7 @@ defmodule BroadwaySQS.Options do
         """
       ],
       on_failure: [
-        type: :atom,
+        type: {:custom, __MODULE__, :type_ack_action, [[{:name, :on_failure}]]},
         default: :noop,
         doc: """
         configures the acking behaviour for failed messages. See the
@@ -220,5 +220,17 @@ defmodule BroadwaySQS.Options do
       {:error,
        "expected :#{name} to be a list with possible members #{inspect(allowed_members)}, got: #{inspect(value)}"}
     end
+  end
+
+  def type_ack_action(:ack, _opts), do: {:ok, :ack}
+  def type_ack_action(:noop, _opts), do: {:ok, :noop}
+
+  def type_ack_action({:nack, timeout}, [{:name, _name}])
+      when is_integer(timeout) and timeout >= 0 and timeout <= 43_200 do
+    {:ok, {:nack, timeout}}
+  end
+
+  def type_ack_action(value, [{:name, name}]) do
+    {:error, "expected :#{name} to be :ack, :noop, or {:nack, timeout}, got: #{inspect(value)}"}
   end
 end

@@ -52,6 +52,12 @@ defmodule BroadwaySQS.ExAwsClientTest do
 
       {:ok, %{status_code: 200, body: "<DeleteMessageBatchResponse />"}}
     end
+
+    def request(:post, url, "Action=ChangeMessageVisibilityBatch" <> _ = body, _, _) do
+      send(self(), {:http_request_called, %{url: url, body: body}})
+
+      {:ok, %{status_code: 200, body: "<ChangeMessageVisibilityBatchResponse />"}}
+    end
   end
 
   defmodule FakeHttpClientWithError do
@@ -291,6 +297,31 @@ defmodule BroadwaySQS.ExAwsClientTest do
 
       assert_received {:http_request_called, %{url: url}}
       assert url == "http://localhost:9324/"
+    end
+
+    test "request with :nack strategy", %{opts: base_opts} do
+      {:ok, opts} = ExAwsClient.init(base_opts ++ [on_failure: {:nack, 10}])
+
+      :persistent_term.put(opts.ack_ref, %{
+        queue_url: opts[:queue_url],
+        config: opts[:config],
+        on_success: opts[:on_success],
+        on_failure: opts[:on_failure]
+      })
+
+      ack_data = %{receipt: %{id: "1", receipt_handle: "abc"}}
+      message = %Message{acknowledger: {ExAwsClient, opts.ack_ref, ack_data}, data: nil}
+
+      ExAwsClient.ack(opts.ack_ref, [], [message])
+
+      assert_received {:http_request_called, %{body: body}}
+
+      assert body ==
+               "Action=ChangeMessageVisibilityBatch" <>
+                 "&ChangeMessageVisibilityBatchRequestEntry.1.Id=1" <>
+                 "&ChangeMessageVisibilityBatchRequestEntry.1.ReceiptHandle=abc" <>
+                 "&ChangeMessageVisibilityBatchRequestEntry.1.VisibilityTimeout=10" <>
+                 "&QueueUrl=my_queue"
     end
   end
 

@@ -37,18 +37,35 @@ defmodule BroadwaySQS.ExAwsClient do
   def ack(ack_ref, successful, failed) do
     ack_options = :persistent_term.get(ack_ref)
 
-    messages =
+    messages_to_delete =
       Enum.filter(successful, &ack?(&1, ack_options, :on_success)) ++
         Enum.filter(failed, &ack?(&1, ack_options, :on_failure))
 
-    messages
+    messages_to_nack_with_timeout =
+      Enum.flat_map(successful, &nack(&1, ack_options, :on_success)) ++
+        Enum.flat_map(failed, &nack(&1, ack_options, :on_failure))
+
+    messages_to_delete
     |> Enum.chunk_every(@max_num_messages_allowed_by_aws)
-    |> Enum.each(fn messages -> delete_messages(messages, ack_options) end)
+    |> Enum.each(&delete_messages(&1, ack_options))
+
+    messages_to_nack_with_timeout
+    |> Enum.chunk_every(@max_num_messages_allowed_by_aws)
+    |> Enum.each(&change_message_visibilities(&1, ack_options))
   end
 
   defp ack?(message, ack_options, option) do
     {_, _, message_ack_options} = message.acknowledger
     (message_ack_options[option] || Map.fetch!(ack_options, option)) == :ack
+  end
+
+  defp nack(message, ack_options, option) do
+    {_, _, message_ack_options} = message.acknowledger
+
+    case message_ack_options[option] || Map.fetch!(ack_options, option) do
+      {:nack, timeout} -> [{message, timeout}]
+      _ -> []
+    end
   end
 
   @impl Acknowledger
@@ -61,6 +78,19 @@ defmodule BroadwaySQS.ExAwsClient do
 
     ack_options.queue_url
     |> ExAws.SQS.delete_message_batch(receipts)
+    |> ExAws.request!(ack_options.config)
+  end
+
+  defp change_message_visibilities(messages_with_timeouts, ack_options) do
+    entries =
+      Enum.map(messages_with_timeouts, fn {message, timeout} ->
+        message
+        |> extract_message_receipt()
+        |> Map.put(:visibility_timeout, timeout)
+      end)
+
+    ack_options.queue_url
+    |> ExAws.SQS.change_message_visibility_batch(entries)
     |> ExAws.request!(ack_options.config)
   end
 
