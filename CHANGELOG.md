@@ -1,5 +1,9 @@
 # Changelog
 
+## NEXT
+
+  * Update ex_aws_sqs to use beamlab_ex_aws_sqs 4.0 which requires hackney 4.0
+
 ## v0.7.4 (2024-06-21)
 
   * Forward compatibility with Broadway v1.1
