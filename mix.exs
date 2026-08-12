@@ -31,6 +31,7 @@ defmodule BroadwaySqs.MixProject do
       {:aws_credentials, "~> 1.0"},
       {:nimble_options, "~> 0.3.7 or ~> 0.4 or ~> 1.0"},
       {:telemetry, "~> 0.4.3 or ~> 1.0"},
+      {:plug, "~> 1.18", only: :test},
       {:ex_doc, ">= 0.19.0", only: :docs}
     ]
   end
