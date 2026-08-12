@@ -82,7 +82,11 @@ defmodule BroadwaySQS.ReqClient do
 
   defp delete_messages(messages, opts) do
     entries = Enum.map(messages, &delete_entry/1)
-    request!(:delete_message_batch, [opts.queue_url, entries], opts)
+
+    request!(
+      SQS.delete_message_batch(opts.queue_url, entries, request_options(opts)),
+      :delete_message_batch
+    )
   end
 
   defp change_message_visibilities(messages_with_timeouts, opts) do
@@ -93,14 +97,16 @@ defmodule BroadwaySQS.ReqClient do
         |> Map.put("VisibilityTimeout", timeout)
       end)
 
-    request!(:change_message_visibility_batch, [opts.queue_url, entries], opts)
+    request!(
+      SQS.change_message_visibility_batch(opts.queue_url, entries, request_options(opts)),
+      :change_message_visibility_batch
+    )
   end
 
-  defp request!(function, arguments, opts) do
-    case apply(SQS, function, arguments ++ [request_options(opts)]) do
-      {:ok, response} -> response
-      {:error, reason} -> raise "SQS request #{function} failed: #{inspect(reason)}"
-    end
+  defp request!({:ok, response}, _function), do: response
+
+  defp request!({:error, reason}, function) do
+    raise "SQS request #{function} failed: #{inspect(reason)}"
   end
 
   defp delete_entry(message) do

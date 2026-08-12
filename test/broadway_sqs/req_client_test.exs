@@ -12,8 +12,8 @@ defmodule BroadwaySQS.ReqClientTest do
     region: "eu-west-1"
   ]
 
-  setup do
-    Req.Test.set_req_test_from_context(__MODULE__)
+  setup context do
+    Req.Test.set_req_test_from_context(context)
     Req.Test.stub(__MODULE__, fn conn -> Req.Test.json(conn, %{}) end)
     :ok
   end
@@ -23,6 +23,11 @@ defmodule BroadwaySQS.ReqClientTest do
 
     Req.Test.expect(__MODULE__, fn conn ->
       payload = Jason.decode!(Req.Test.raw_body(conn))
+
+      assert Plug.Conn.get_req_header(conn, "content-type") == ["application/x-amz-json-1.0"]
+      assert Plug.Conn.get_req_header(conn, "x-amz-target") == ["AmazonSQS.ReceiveMessage"]
+      assert [authorization] = Plug.Conn.get_req_header(conn, "authorization")
+      assert String.starts_with?(authorization, "AWS4-HMAC-SHA256 ")
 
       assert payload == %{
                "QueueUrl" => queue_url,
@@ -87,6 +92,57 @@ defmodule BroadwaySQS.ReqClientTest do
 
     log = capture_log(fn -> assert ReqClient.receive_messages(1, opts) == [] end)
     assert log =~ "Unable to fetch events from AWS queue #{queue_url}"
+  end
+
+  test "sends a session token" do
+    queue_url = queue_url()
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert Plug.Conn.get_req_header(conn, "x-amz-security-token") == ["session-token"]
+      Req.Test.json(conn, %{"Messages" => []})
+    end)
+
+    {:ok, opts} =
+      ReqClient.init(
+        opts(queue_url,
+          config: Keyword.put(@config, :token, "session-token")
+        )
+      )
+
+    assert ReqClient.receive_messages(1, opts) == []
+  end
+
+  test "logs when credentials are unavailable" do
+    queue_url = queue_url()
+
+    log =
+      capture_log(fn ->
+        {:ok, opts} = ReqClient.init(opts(queue_url, config: [region: "eu-west-1"]))
+        assert ReqClient.receive_messages(1, opts) == []
+      end)
+
+    assert log =~ "aws_credentials_not_found"
+  end
+
+  test "logs when the region is unavailable" do
+    queue_url = queue_url()
+
+    log =
+      capture_log(fn ->
+        {:ok, opts} =
+          ReqClient.init(
+            opts(queue_url,
+              config: [
+                access_key_id: "access-key",
+                secret_access_key: "secret-key"
+              ]
+            )
+          )
+
+        assert ReqClient.receive_messages(1, opts) == []
+      end)
+
+    assert log =~ "aws_region_not_found"
   end
 
   test "acknowledges messages in delete batches" do

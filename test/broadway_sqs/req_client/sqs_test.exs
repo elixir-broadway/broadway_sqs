@@ -1,6 +1,11 @@
 defmodule BroadwaySQS.ReqClient.SQSTest do
   use ExUnit.Case, async: true
 
+  setup context do
+    Req.Test.set_req_test_from_context(context)
+    :ok
+  end
+
   alias BroadwaySQS.ReqClient.SQS
 
   @request_options [
@@ -9,11 +14,10 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
   ]
 
   test "receive_message builds the SQS JSON payload" do
-    bypass = Bypass.open()
-    queue_url = "http://localhost:#{bypass.port}/queue"
+    queue_url = queue_url()
 
-    Bypass.expect_once(bypass, "POST", "/queue", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Req.Test.expect(__MODULE__, fn conn ->
+      body = Req.Test.raw_body(conn)
 
       assert Jason.decode!(body) == %{
                "QueueUrl" => queue_url,
@@ -25,7 +29,7 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
              }
 
       assert Plug.Conn.get_req_header(conn, "x-amz-target") == ["AmazonSQS.ReceiveMessage"]
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{"Messages" => []}))
+      Req.Test.json(conn, %{"Messages" => []})
     end)
 
     options = %{
@@ -40,18 +44,17 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
              SQS.receive_message(
                queue_url,
                options,
-               Keyword.put(@request_options, :endpoint, queue_url)
+               Keyword.merge(@request_options, endpoint: queue_url, plug: {Req.Test, __MODULE__})
              )
   end
 
   test "receive_message supports requesting all attributes" do
-    bypass = Bypass.open()
-    queue_url = "http://localhost:#{bypass.port}/queue"
+    queue_url = queue_url()
 
-    Bypass.expect_once(bypass, "POST", "/queue", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Req.Test.expect(__MODULE__, fn conn ->
+      body = Req.Test.raw_body(conn)
       assert Jason.decode!(body)["AttributeNames"] == ["All"]
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{"Messages" => []}))
+      Req.Test.json(conn, %{"Messages" => []})
     end)
 
     options = %{max_number_of_messages: 1, attribute_names: :all}
@@ -60,34 +63,32 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
              SQS.receive_message(
                queue_url,
                options,
-               Keyword.put(@request_options, :endpoint, queue_url)
+               Keyword.merge(@request_options, endpoint: queue_url, plug: {Req.Test, __MODULE__})
              )
   end
 
   test "delete_message_batch builds the delete payload" do
-    bypass = Bypass.open()
-    queue_url = "http://localhost:#{bypass.port}/queue"
+    queue_url = queue_url()
     entries = [%{"Id" => "1", "ReceiptHandle" => "receipt-1"}]
 
-    Bypass.expect_once(bypass, "POST", "/queue", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Req.Test.expect(__MODULE__, fn conn ->
+      body = Req.Test.raw_body(conn)
 
       assert Jason.decode!(body) == %{"QueueUrl" => queue_url, "Entries" => entries}
       assert Plug.Conn.get_req_header(conn, "x-amz-target") == ["AmazonSQS.DeleteMessageBatch"]
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{"Successful" => [%{"Id" => "1"}]}))
+      Req.Test.json(conn, %{"Successful" => [%{"Id" => "1"}]})
     end)
 
     assert {:ok, %{"Successful" => [%{"Id" => "1"}]}} =
              SQS.delete_message_batch(
                queue_url,
                entries,
-               Keyword.put(@request_options, :endpoint, queue_url)
+               Keyword.merge(@request_options, endpoint: queue_url, plug: {Req.Test, __MODULE__})
              )
   end
 
   test "change_message_visibility_batch builds the visibility payload" do
-    bypass = Bypass.open()
-    queue_url = "http://localhost:#{bypass.port}/queue"
+    queue_url = queue_url()
 
     entries = [
       %{
@@ -97,8 +98,8 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
       }
     ]
 
-    Bypass.expect_once(bypass, "POST", "/queue", fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Req.Test.expect(__MODULE__, fn conn ->
+      body = Req.Test.raw_body(conn)
 
       assert Jason.decode!(body) == %{"QueueUrl" => queue_url, "Entries" => entries}
 
@@ -106,16 +107,18 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
                "AmazonSQS.ChangeMessageVisibilityBatch"
              ]
 
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{"Successful" => [%{"Id" => "1"}]}))
+      Req.Test.json(conn, %{"Successful" => [%{"Id" => "1"}]})
     end)
 
     assert {:ok, %{"Successful" => [%{"Id" => "1"}]}} =
              SQS.change_message_visibility_batch(
                queue_url,
                entries,
-               Keyword.put(@request_options, :endpoint, queue_url)
+               Keyword.merge(@request_options, endpoint: queue_url, plug: {Req.Test, __MODULE__})
              )
   end
+
+  defp queue_url, do: "https://sqs.eu-west-1.amazonaws.com/123456789012/test-queue"
 
   test "normalize_message converts SQS messages to the client format" do
     message = %{

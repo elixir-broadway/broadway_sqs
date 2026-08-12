@@ -23,56 +23,22 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
     end
   end
 
-  @receive_message_response """
-  <?xml version="1.0"?>
-  <ReceiveMessageResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <ReceiveMessageResult>
-      <Message>
-        <MessageId>7cd4d61a-2d9a-4922-9738-308af6126fea</MessageId>
-        <ReceiptHandle>receipt-handle-1</ReceiptHandle>
-        <MD5OfBody>8cd6cfc2639481fee178bd04dd3628a7</MD5OfBody>
-        <Body>hello world</Body>
-      </Message>
-      <Message>
-        <MessageId>c431bcb8-3275-4cbb-a4a1-7bcbbc5773d1</MessageId>
-        <ReceiptHandle>receipt-handle-2</ReceiptHandle>
-        <MD5OfBody>35179a54ea587953021400eb0cd23201</MD5OfBody>
-        <Body>how are you?</Body>
-      </Message>
-    </ReceiveMessageResult>
-    <ResponseMetadata>
-      <RequestId>251d6374-3eac-5128-b100-3b06e7db493a</RequestId>
-    </ResponseMetadata>
-  </ReceiveMessageResponse>
-  """
-
-  @receive_message_empty_response """
-  <?xml version="1.0"?>
-  <ReceiveMessageResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <ReceiveMessageResult>
-    </ReceiveMessageResult>
-    <ResponseMetadata>
-      <RequestId>251d6374-3eac-5128-b100-3b06e7db493a</RequestId>
-    </ResponseMetadata>
-  </ReceiveMessageResponse>
-  """
-
-  @delete_message_response """
-  <?xml version="1.0"?>
-  <DeleteMessageBatchResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <DeleteMessageBatchResult>
-      <DeleteMessageBatchResultEntry>
-        <Id>my-delete-message-batch-id-1</Id>
-      </DeleteMessageBatchResultEntry>
-      <DeleteMessageBatchResultEntry>
-        <Id>my-delete-message-batch-id-2</Id>
-      </DeleteMessageBatchResultEntry>
-    </DeleteMessageBatchResult>
-    <ResponseMetadata>
-      <RequestId>1164da49-dd83-5d9d-acaa-823b38f2d2f8</RequestId>
-    </ResponseMetadata>
-  </DeleteMessageBatchResponse>
-  """
+  @receive_message_response %{
+    "Messages" => [
+      %{
+        "MessageId" => "7cd4d61a-2d9a-4922-9738-308af6126fea",
+        "ReceiptHandle" => "receipt-handle-1",
+        "MD5OfBody" => "8cd6cfc2639481fee178bd04dd3628a7",
+        "Body" => "hello world"
+      },
+      %{
+        "MessageId" => "c431bcb8-3275-4cbb-a4a1-7bcbbc5773d1",
+        "ReceiptHandle" => "receipt-handle-2",
+        "MD5OfBody" => "35179a54ea587953021400eb0cd23201",
+        "Body" => "how are you?"
+      }
+    ]
+  }
 
   defmodule RequestCounter do
     use Agent
@@ -95,49 +61,40 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
   end
 
   setup do
-    bypass = Bypass.open()
-
-    Application.put_env(:ex_aws, :sqs,
-      scheme: "http",
-      host: "localhost",
-      port: bypass.port
-    )
-
-    on_exit(fn -> Application.delete_env(:ex_aws, :sqs) end)
-
-    {:ok, bypass: bypass}
+    Req.Test.set_req_test_to_shared()
+    :ok
   end
 
-  test "consume messages from SQS and ack it", %{bypass: bypass} do
+  test "consume messages from SQS and ack it" do
     us = self()
 
-    Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+    Req.Test.expect(__MODULE__, 9, fn conn ->
+      payload = Jason.decode!(Req.Test.raw_body(conn))
+      action = List.first(Conn.get_req_header(conn, "x-amz-target"))
 
       response =
-        case body do
-          "Action=ReceiveMessage" <> _rest ->
+        case action do
+          "AmazonSQS.ReceiveMessage" ->
             if RequestCounter.count_for(:receive_message) > 5 do
-              @receive_message_empty_response
+              %{}
             else
               RequestCounter.increment_for(:receive_message)
               @receive_message_response
             end
 
-          "Action=DeleteMessageBatch" <> _rest ->
+          "AmazonSQS.DeleteMessageBatch" ->
+            assert payload["Entries"]
             RequestCounter.increment_for(:delete_message_batch)
             send(us, :messages_deleted)
-            @delete_message_response
+            %{"Successful" => Enum.map(payload["Entries"], &Map.take(&1, ["Id"]))}
         end
 
-      conn
-      |> Conn.put_resp_header("content-type", "text/xml")
-      |> Conn.resp(200, response)
+      Req.Test.json(conn, response)
     end)
 
     {:ok, _} = RequestCounter.start_link(%{receive_message: 0, delete_message_batch: 0})
 
-    {:ok, _consumer} = start_fake_consumer(bypass)
+    {:ok, _consumer} = start_fake_consumer()
 
     assert_receive {:message_handled, "hello world", %{receipt_handle: "receipt-handle-1"}}, 1_000
     assert_receive {:message_handled, "how are you?", %{receipt_handle: "receipt-handle-2"}}
@@ -152,20 +109,21 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
     assert RequestCounter.count_for(:delete_message_batch) == 3
   end
 
-  defp start_fake_consumer(bypass) do
+  defp start_fake_consumer do
     Broadway.start_link(MyConsumer,
       name: MyConsumer,
       producer: [
         module:
           {BroadwaySQS.Producer,
-           sqs_client: BroadwaySQS.ExAwsClient,
+           sqs_client: BroadwaySQS.ReqClient,
            max_number_of_messages: 2,
            config: [
              access_key_id: "MY_AWS_ACCESS_KEY_ID",
              secret_access_key: "MY_AWS_SECRET_ACCESS_KEY",
-             region: "us-east-2"
+             region: "us-east-2",
+             plug: {Req.Test, __MODULE__}
            ],
-           queue_url: queue_endpoint_url(bypass)},
+           queue_url: queue_endpoint_url()},
         concurrency: 1
       ],
       processors: [
@@ -178,7 +136,5 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
     )
   end
 
-  defp queue_endpoint_url(bypass) do
-    "http://localhost:#{bypass.port}/my_queue"
-  end
+  defp queue_endpoint_url, do: "https://sqs.us-east-2.amazonaws.com/123456789012/my_queue"
 end
