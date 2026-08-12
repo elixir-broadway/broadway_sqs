@@ -174,10 +174,12 @@ defmodule BroadwaySQS.Producer do
 
   @behaviour Producer
 
+  @default_sqs_client BroadwaySQS.ReqClient
+
   @impl true
   def init(opts) do
     receive_interval = opts[:receive_interval]
-    sqs_client = opts[:sqs_client]
+    sqs_client = Keyword.get(opts, :sqs_client, @default_sqs_client)
     {:ok, client_opts} = sqs_client.init(opts)
 
     {:producer,

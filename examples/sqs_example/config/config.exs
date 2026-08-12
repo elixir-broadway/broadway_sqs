@@ -3,7 +3,6 @@ use Mix.Config
 config :broadway_sqs_example,
   producer_module:
     {BroadwaySQS.Producer,
-     sqs_client: BroadwaySQS.ReqClient,
      config: [
        # access_key_id: "YOUR_AWS_ACCESS_KEY_ID",
        # secret_access_key: "YOUR_AWS_SECRET_ACCESS_KEY"

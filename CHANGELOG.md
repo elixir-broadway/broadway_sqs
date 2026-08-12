@@ -4,6 +4,7 @@
 
   * Replace the default `BroadwaySQS.ExAwsClient` with the Req-based
     `BroadwaySQS.ReqClient`.
+  * Make `BroadwaySQS.ReqClient` as default sqs_client.
   * Implement the SQS JSON API requests used by Broadway SQS with Req and AWS
     * `ReceiveMessage`
     * `DeleteMessageBatch`
