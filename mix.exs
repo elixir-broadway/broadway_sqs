@@ -8,7 +8,7 @@ defmodule BroadwaySqs.MixProject do
     [
       app: :broadway_sqs,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.16",
       name: "BroadwaySQS",
       description: @description,
       start_permanent: Mix.env() == :prod,
