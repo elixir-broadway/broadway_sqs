@@ -6,6 +6,7 @@ defmodule BroadwaySQS.ReqClient.Request do
   @type options :: [
           credentials: map() | keyword(),
           endpoint: String.t(),
+          plug: term(),
           region: String.t(),
           queue_url: String.t()
         ]
@@ -29,7 +30,7 @@ defmodule BroadwaySQS.ReqClient.Request do
              decode_body: false
            ),
          {:ok, body} <- decode_body(response) do
-      if response.status >= 200 and response.status < 300 do
+      if response.status in 200..299 do
         {:ok, body}
       else
         {:error, {:http_error, response.status, body}}
@@ -50,6 +51,7 @@ defmodule BroadwaySQS.ReqClient.Request do
 
     Req.new(
       url: Keyword.get(opts, :endpoint, queue_url),
+      plug: Keyword.get(opts, :plug),
       headers: headers,
       aws_sigv4: [
         access_key_id: credentials[:access_key_id],
