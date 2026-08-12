@@ -20,9 +20,7 @@ defmodule BroadwaySQSExample.MixProject do
 
   defp deps do
     [
-      {:broadway_sqs, path: "../.."},
-      {:hackney, "~> 1.9"},
-      {:httpoison, "~> 0.13.0"}
+      {:broadway_sqs, path: "../.."}
     ]
   end
 end

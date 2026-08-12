@@ -8,14 +8,12 @@ For more details on using Broadway with Amazon SQS, please see the
 
 ## Installation
 
-Add `:broadway_sqs` to the list of dependencies in `mix.exs` along with the HTTP
-client of your choice (defaults to `:hackney`):
+Add `:broadway_sqs` to the list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:broadway_sqs, "~> 0.7.1"},
-    {:hackney, "~> 1.9"}
+    {:broadway_sqs, "~> 0.7.1"}
   ]
 end
 ```

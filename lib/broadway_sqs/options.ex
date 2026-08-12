@@ -23,7 +23,7 @@ defmodule BroadwaySQS.Options do
         messages. Pay attention that all options passed to the producer will be forwarded
         to the client.
         """,
-        default: BroadwaySQS.ExAwsClient
+        default: BroadwaySQS.ReqClient
       ],
       receive_interval: [
         type: :non_neg_integer,
@@ -53,10 +53,10 @@ defmodule BroadwaySQS.Options do
         type: :keyword_list,
         default: [],
         doc: """
-        A set of options that overrides the default ExAws configuration
-        options. The most commonly used options are: `:access_key_id`, `:secret_access_key`,
-        `:scheme`, `:region` and `:port`. For a complete list of configuration options and
-        their default values, please see the `ExAws` documentation.
+        A set of options for the SQS client. The `:region` option is used for
+        AWS Signature Version 4. Credentials are normally discovered through
+        `aws_credentials`; `:access_key_id`, `:secret_access_key`, and `:token`
+        can be provided for explicit credentials.
         """
       ],
       max_number_of_messages: [
