@@ -8,62 +8,65 @@ defmodule BroadwaySQS.ExAwsClientTest do
   defmodule FakeHttpClient do
     @behaviour ExAws.Request.HttpClient
 
-    def request(:post, url, "Action=ReceiveMessage" <> _ = body, _, _) do
-      send(self(), {:http_request_called, %{url: url, body: body}})
+    def request(:post, url, body, headers, _) do
+      case List.keyfind(headers, "x-amz-target", 0) do
+        {"x-amz-target", action} -> handle_request(action, url, body)
+        false -> assert false, "No x-amz-target found for action"
+      end
+    end
 
-      response_body = """
-      <ReceiveMessageResponse>
-        <ReceiveMessageResult>
-          <Message>
-            <MessageId>Id_1</MessageId>
-            <ReceiptHandle>ReceiptHandle_1</ReceiptHandle>
-            <MD5OfBody>fake_md5</MD5OfBody>
-            <Body>Message 1</Body>
-            <Attribute>
-              <Name>SenderId</Name>
-              <Value>13</Value>
-            </Attribute>
-            <Attribute>
-              <Name>ApproximateReceiveCount</Name>
-              <Value>5</Value>
-            </Attribute>
-            <MessageAttribute>
-              <Name>TestStringAttribute</Name>
-              <Value>
-                <StringValue>Test</StringValue>
-                <DataType>String</DataType>
-              </Value>
-            </MessageAttribute>
-          </Message>
-          <Message>
-            <MessageId>Id_2</MessageId>
-            <ReceiptHandle>ReceiptHandle_2</ReceiptHandle>
-            <Body>Message 2</Body>
-          </Message>
-        </ReceiveMessageResult>
-      </ReceiveMessageResponse>
-      """
+    defp handle_request("AmazonSQS.ReceiveMessage" = action, url, body) do
+      send(self(), {:http_request_called, %{url: url, body: body, action: action}})
+
+      response_body =
+        Jason.encode!(%{
+          "Messages" => [
+            %{
+              "MessageId" => "Id_1",
+              "ReceiptHandle" => "ReceiptHandle_1",
+              "MD5OfBody" => "fake_md5",
+              "Body" => "Message 1",
+              "Attributes" => %{
+                "SenderId" => "13",
+                "ApproximateReceiveCount" => "5"
+              },
+              "MessageAttributes" => %{
+                "TestStringAttribute" => %{
+                  "StringValue" => "Test",
+                  "DataType" => "String"
+                }
+              }
+            },
+            %{
+              "MessageId" => "Id_2",
+              "ReceiptHandle" => "ReceiptHandle_2",
+              "Body" => "Message 2"
+            }
+          ]
+        })
 
       {:ok, %{status_code: 200, body: response_body}}
     end
 
-    def request(:post, url, "Action=DeleteMessageBatch" <> _ = body, _, _) do
-      send(self(), {:http_request_called, %{url: url, body: body}})
+    defp handle_request("AmazonSQS.DeleteMessageBatch" = action, url, body) do
+      send(self(), {:http_request_called, %{url: url, body: body, action: action}})
 
-      {:ok, %{status_code: 200, body: "<DeleteMessageBatchResponse />"}}
+      {:ok, %{status_code: 200, body: ~s({"Successful":[],"Failed":[]})}}
     end
 
-    def request(:post, url, "Action=ChangeMessageVisibilityBatch" <> _ = body, _, _) do
-      send(self(), {:http_request_called, %{url: url, body: body}})
+    defp handle_request("AmazonSQS.ChangeMessageVisibilityBatch" = action, url, body) do
+      send(self(), {:http_request_called, %{url: url, body: body, action: action}})
 
-      {:ok, %{status_code: 200, body: "<ChangeMessageVisibilityBatchResponse />"}}
+      {:ok, %{status_code: 200, body: ~s({"Successful":[],"Failed":[]})}}
     end
   end
 
   defmodule FakeHttpClientWithError do
     @behaviour ExAws.Request.HttpClient
 
-    def request(:post, _url, "Action=ReceiveMessage" <> _, _, _) do
+    def request(:post, _url, _body, headers, _) do
+      {_, "AmazonSQS.ReceiveMessage"} = List.keyfind(headers, "x-amz-target", 0)
+
       {:error, %{reason: "Fake error"}}
     end
   end
@@ -101,9 +104,9 @@ defmodule BroadwaySQS.ExAwsClientTest do
       {:ok, opts} = ExAwsClient.init(base_opts)
       [%{metadata: metadata} | _] = ExAwsClient.receive_messages(10, opts)
 
-      assert metadata.message_id == "Id_1"
-      assert metadata.receipt_handle == "ReceiptHandle_1"
-      assert metadata.md5_of_body == "fake_md5"
+      assert metadata["MessageId"] == "Id_1"
+      assert metadata["ReceiptHandle"] == "ReceiptHandle_1"
+      assert metadata["MD5OfBody"] == "fake_md5"
     end
 
     test "add attributes to metadata", %{opts: base_opts} do
@@ -112,8 +115,8 @@ defmodule BroadwaySQS.ExAwsClientTest do
       [%{metadata: metadata_1}, %{metadata: metadata_2} | _] =
         ExAwsClient.receive_messages(10, opts)
 
-      assert metadata_1.attributes == %{"sender_id" => 13, "approximate_receive_count" => 5}
-      assert metadata_2.attributes == []
+      assert metadata_1["Attributes"] == %{"SenderId" => "13", "ApproximateReceiveCount" => "5"}
+      assert metadata_2["Attributes"] == nil
     end
 
     test "add message_attributes to metadata", %{opts: base_opts} do
@@ -122,17 +125,11 @@ defmodule BroadwaySQS.ExAwsClientTest do
       [%{metadata: metadata_1}, %{metadata: metadata_2} | _] =
         ExAwsClient.receive_messages(10, opts)
 
-      assert metadata_1.message_attributes == %{
-               "TestStringAttribute" => %{
-                 name: "TestStringAttribute",
-                 data_type: "String",
-                 string_value: "Test",
-                 binary_value: "",
-                 value: "Test"
-               }
+      assert metadata_1["MessageAttributes"] == %{
+               "TestStringAttribute" => %{"DataType" => "String", "StringValue" => "Test"}
              }
 
-      assert metadata_2.message_attributes == []
+      assert metadata_2["MessageAttributes"] == nil
     end
 
     test "if the request fails, returns an empty list and log the error", %{opts: base_opts} do
@@ -152,7 +149,7 @@ defmodule BroadwaySQS.ExAwsClientTest do
       ExAwsClient.receive_messages(10, opts)
 
       assert_received {:http_request_called, %{body: body, url: url}}
-      assert body == "Action=ReceiveMessage&MaxNumberOfMessages=10&QueueUrl=my_queue"
+      assert %{"MaxNumberOfMessages" => 10, "QueueUrl" => "my_queue"} = Jason.decode!(body)
       assert url == "https://sqs.us-east-1.amazonaws.com/"
     end
 
@@ -161,7 +158,7 @@ defmodule BroadwaySQS.ExAwsClientTest do
       ExAwsClient.receive_messages(10, opts)
 
       assert_received {:http_request_called, %{body: body, url: _url}}
-      assert body =~ "WaitTimeSeconds=0"
+      assert %{"WaitTimeSeconds" => 0} = Jason.decode!(body)
     end
 
     test "request with custom :max_number_of_messages", %{opts: base_opts} do
@@ -169,7 +166,7 @@ defmodule BroadwaySQS.ExAwsClientTest do
       ExAwsClient.receive_messages(10, opts)
 
       assert_received {:http_request_called, %{body: body, url: _url}}
-      assert body =~ "MaxNumberOfMessages=5"
+      assert %{"MaxNumberOfMessages" => 5} = Jason.decode!(body)
     end
 
     test "request with custom :config options", %{opts: base_opts} do
@@ -225,10 +222,14 @@ defmodule BroadwaySQS.ExAwsClientTest do
 
       assert_received {:http_request_called, %{body: body, url: url}}
 
-      assert body ==
-               "Action=DeleteMessageBatch" <>
-                 "&DeleteMessageBatchRequestEntry.1.Id=1&DeleteMessageBatchRequestEntry.1.ReceiptHandle=abc" <>
-                 "&DeleteMessageBatchRequestEntry.2.Id=2&DeleteMessageBatchRequestEntry.2.ReceiptHandle=def&QueueUrl=my_queue"
+      assert Jason.decode!(body) ==
+               %{
+                 "Entries" => [
+                   %{"Id" => "1", "ReceiptHandle" => "abc"},
+                   %{"Id" => "2", "ReceiptHandle" => "def"}
+                 ],
+                 "QueueUrl" => "my_queue"
+               }
 
       assert url == "https://sqs.us-east-1.amazonaws.com/"
     end
@@ -267,10 +268,14 @@ defmodule BroadwaySQS.ExAwsClientTest do
 
       assert_received {:http_request_called, %{body: body}}
 
-      assert body ==
-               "Action=DeleteMessageBatch" <>
-                 "&DeleteMessageBatchRequestEntry.1.Id=2&DeleteMessageBatchRequestEntry.1.ReceiptHandle=def" <>
-                 "&DeleteMessageBatchRequestEntry.2.Id=3&DeleteMessageBatchRequestEntry.2.ReceiptHandle=ghi&QueueUrl=my_queue"
+      assert Jason.decode!(body) ==
+               %{
+                 "Entries" => [
+                   %{"Id" => "2", "ReceiptHandle" => "def"},
+                   %{"Id" => "3", "ReceiptHandle" => "ghi"}
+                 ],
+                 "QueueUrl" => "my_queue"
+               }
     end
 
     test "request with custom :config options", %{opts: base_opts} do
@@ -314,14 +319,16 @@ defmodule BroadwaySQS.ExAwsClientTest do
 
       ExAwsClient.ack(opts.ack_ref, [], [message])
 
-      assert_received {:http_request_called, %{body: body}}
+      assert_received {:http_request_called, %{body: body, action: action}}
 
-      assert body ==
-               "Action=ChangeMessageVisibilityBatch" <>
-                 "&ChangeMessageVisibilityBatchRequestEntry.1.Id=1" <>
-                 "&ChangeMessageVisibilityBatchRequestEntry.1.ReceiptHandle=abc" <>
-                 "&ChangeMessageVisibilityBatchRequestEntry.1.VisibilityTimeout=10" <>
-                 "&QueueUrl=my_queue"
+      assert action == "AmazonSQS.ChangeMessageVisibilityBatch"
+
+      assert %{
+               "Entries" => [
+                 %{"Id" => "1", "ReceiptHandle" => "abc", "VisibilityTimeout" => 10}
+               ],
+               "QueueUrl" => "my_queue"
+             } == Jason.decode!(body)
     end
   end
 

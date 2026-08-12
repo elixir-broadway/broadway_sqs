@@ -24,54 +24,35 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
   end
 
   @receive_message_response """
-  <?xml version="1.0"?>
-  <ReceiveMessageResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <ReceiveMessageResult>
-      <Message>
-        <MessageId>7cd4d61a-2d9a-4922-9738-308af6126fea</MessageId>
-        <ReceiptHandle>receipt-handle-1</ReceiptHandle>
-        <MD5OfBody>8cd6cfc2639481fee178bd04dd3628a7</MD5OfBody>
-        <Body>hello world</Body>
-      </Message>
-      <Message>
-        <MessageId>c431bcb8-3275-4cbb-a4a1-7bcbbc5773d1</MessageId>
-        <ReceiptHandle>receipt-handle-2</ReceiptHandle>
-        <MD5OfBody>35179a54ea587953021400eb0cd23201</MD5OfBody>
-        <Body>how are you?</Body>
-      </Message>
-    </ReceiveMessageResult>
-    <ResponseMetadata>
-      <RequestId>251d6374-3eac-5128-b100-3b06e7db493a</RequestId>
-    </ResponseMetadata>
-  </ReceiveMessageResponse>
+  {
+    "Messages": [
+      {
+        "MessageId": "7cd4d61a-2d9a-4922-9738-308af6126fea",
+        "ReceiptHandle": "receipt-handle-1",
+        "MD5OfBody": "8cd6cfc2639481fee178bd04dd3628a7",
+        "Body": "hello world"
+      },
+      {
+        "MessageId": "c431bcb8-3275-4cbb-a4a1-7bcbbc5773d1",
+        "ReceiptHandle": "receipt-handle-2",
+        "MD5OfBody": "35179a54ea587953021400eb0cd23201",
+        "Body": "how are you?"
+      }
+    ]
+  }
   """
 
-  @receive_message_empty_response """
-  <?xml version="1.0"?>
-  <ReceiveMessageResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <ReceiveMessageResult>
-    </ReceiveMessageResult>
-    <ResponseMetadata>
-      <RequestId>251d6374-3eac-5128-b100-3b06e7db493a</RequestId>
-    </ResponseMetadata>
-  </ReceiveMessageResponse>
-  """
+  # AWS omits "Messages" when the receive returns nothing.
+  @receive_message_empty_response "{}"
 
   @delete_message_response """
-  <?xml version="1.0"?>
-  <DeleteMessageBatchResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
-    <DeleteMessageBatchResult>
-      <DeleteMessageBatchResultEntry>
-        <Id>my-delete-message-batch-id-1</Id>
-      </DeleteMessageBatchResultEntry>
-      <DeleteMessageBatchResultEntry>
-        <Id>my-delete-message-batch-id-2</Id>
-      </DeleteMessageBatchResultEntry>
-    </DeleteMessageBatchResult>
-    <ResponseMetadata>
-      <RequestId>1164da49-dd83-5d9d-acaa-823b38f2d2f8</RequestId>
-    </ResponseMetadata>
-  </DeleteMessageBatchResponse>
+  {
+    "Successful": [
+      {"Id": "my-delete-message-batch-id-1"},
+      {"Id": "my-delete-message-batch-id-2"}
+    ],
+    "Failed": []
+  }
   """
 
   defmodule RequestCounter do
@@ -112,11 +93,12 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
     us = self()
 
     Bypass.expect(bypass, fn conn ->
-      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      {"x-amz-target", action} = List.keyfind(conn.req_headers, "x-amz-target", 0)
+      {:ok, _body, conn} = Plug.Conn.read_body(conn)
 
       response =
-        case body do
-          "Action=ReceiveMessage" <> _rest ->
+        case action do
+          "AmazonSQS.ReceiveMessage" ->
             if RequestCounter.count_for(:receive_message) > 5 do
               @receive_message_empty_response
             else
@@ -124,14 +106,14 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
               @receive_message_response
             end
 
-          "Action=DeleteMessageBatch" <> _rest ->
+          "AmazonSQS.DeleteMessageBatch" ->
             RequestCounter.increment_for(:delete_message_batch)
             send(us, :messages_deleted)
             @delete_message_response
         end
 
       conn
-      |> Conn.put_resp_header("content-type", "text/xml")
+      |> Conn.put_resp_header("content-type", "application/x-amz-json-1.0")
       |> Conn.resp(200, response)
     end)
 
@@ -139,8 +121,10 @@ defmodule BroadwaySQS.BroadwaySQS.IntegrationTest do
 
     {:ok, _consumer} = start_fake_consumer(bypass)
 
-    assert_receive {:message_handled, "hello world", %{receipt_handle: "receipt-handle-1"}}, 1_000
-    assert_receive {:message_handled, "how are you?", %{receipt_handle: "receipt-handle-2"}}
+    assert_receive {:message_handled, "hello world", %{"ReceiptHandle" => "receipt-handle-1"}},
+                   1_000
+
+    assert_receive {:message_handled, "how are you?", %{"ReceiptHandle" => "receipt-handle-2"}}
 
     assert_receive {:batch_handled, _messages}
 

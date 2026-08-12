@@ -94,12 +94,17 @@ defmodule BroadwaySQS.ExAwsClient do
     |> ExAws.request!(ack_options.config)
   end
 
-  defp wrap_received_messages({:ok, %{body: body}}, %{ack_ref: ack_ref}) do
-    Enum.map(body.messages, fn message ->
-      metadata = Map.delete(message, :body)
+  defp wrap_received_messages({:ok, %{"Messages" => messages}}, %{ack_ref: ack_ref}) do
+    Enum.map(messages, fn message ->
+      metadata = Map.delete(message, "Body")
       acknowledger = build_acknowledger(message, ack_ref)
-      %Message{data: message.body, metadata: metadata, acknowledger: acknowledger}
+      %Message{data: message["Body"], metadata: metadata, acknowledger: acknowledger}
     end)
+  end
+
+  # JSON ReceiveMessage omits "Messages" when nothing was returned.
+  defp wrap_received_messages({:ok, _}, _) do
+    []
   end
 
   defp wrap_received_messages({:error, reason}, %{queue_url: queue_url}) do
@@ -108,7 +113,7 @@ defmodule BroadwaySQS.ExAwsClient do
   end
 
   defp build_acknowledger(message, ack_ref) do
-    receipt = %{id: message.message_id, receipt_handle: message.receipt_handle}
+    receipt = %{id: message["MessageId"], receipt_handle: message["ReceiptHandle"]}
     {__MODULE__, ack_ref, %{receipt: receipt}}
   end
 

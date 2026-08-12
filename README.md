@@ -1,10 +1,10 @@
 # BroadwaySQS
 
-A AWS SQS connector for [Broadway](https://github.com/dashbitco/broadway).
+An AWS SQS connector for [Broadway](https://github.com/dashbitco/broadway).
 
-Documentation can be found at [https://hexdocs.pm/broadway_sqs](https://hexdocs.pm/broadway_sqs).
+Documentation can be found at <https://broadway-sqs.hexdocs.pm>.
 For more details on using Broadway with Amazon SQS, please see the
-[Amazon SQS Guide](https://hexdocs.pm/broadway/amazon-sqs.html).
+[Amazon SQS Guide](https://broadway.hexdocs.pm/amazon-sqs.html).
 
 ## Installation
 
@@ -15,7 +15,7 @@ client of your choice (defaults to `:hackney`):
 def deps do
   [
     {:broadway_sqs, "~> 0.7.1"},
-    {:hackney, "~> 1.9"}
+    {:hackney, "~> 4.0"}
   ]
 end
 ```
