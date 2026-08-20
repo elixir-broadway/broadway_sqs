@@ -95,6 +95,16 @@ defmodule BroadwaySQS.BroadwaySQS.ProducerTest do
       end)
     end
 
+    test "uses ReqClient when sqs_client is not provided" do
+      assert {:producer, %{sqs_client: {BroadwaySQS.ReqClient, client_opts}}} =
+               BroadwaySQS.Producer.init(
+                 queue_url: "https://sqs.amazonaws.com/0000000000/my_queue",
+                 broadway: [name: __MODULE__]
+               )
+
+      assert client_opts[:queue_url] == "https://sqs.amazonaws.com/0000000000/my_queue"
+    end
+
     test "when the queue url is nil" do
       assert_raise(
         ArgumentError,

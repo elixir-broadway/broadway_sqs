@@ -27,12 +27,11 @@ defmodule BroadwaySqs.MixProject do
   defp deps do
     [
       {:broadway, "~> 1.0"},
-      {:ex_aws_sqs, "~> 3.2.1 or ~> 3.3"},
+      {:req, "~> 0.7.2"},
+      {:aws_credentials, "~> 1.0"},
       {:nimble_options, "~> 0.3.7 or ~> 0.4 or ~> 1.0"},
       {:telemetry, "~> 0.4.3 or ~> 1.0"},
-      {:saxy, "~> 1.1"},
-      {:hackney, "~> 1.9", only: [:dev, :test]},
-      {:bypass, "~> 2.1.0", only: :test},
+      {:plug, "~> 1.18", only: :test},
       {:ex_doc, ">= 0.19.0", only: :docs}
     ]
   end

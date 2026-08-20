@@ -3,7 +3,7 @@ defmodule BroadwaySQS.Producer do
   A GenStage producer that continuously polls messages from a SQS queue and
   acknowledge them after being successfully processed.
 
-  By default this producer uses `BroadwaySQS.ExAwsClient` to talk to SQS but
+  By default this producer uses `BroadwaySQS.ReqClient` to talk to SQS but
   you can provide your client by implementing the `BroadwaySQS.SQSClient`
   behaviour.
 
@@ -14,7 +14,7 @@ defmodule BroadwaySQS.Producer do
 
   Aside from `:receive_interval` and `:sqs_client` which are generic and apply to all
   producers (regardless of the client implementation), all other options are specific to
-  the `BroadwaySQS.ExAwsClient`, which is the default client.
+  the `BroadwaySQS.ReqClient`, which is the default client.
 
   #{NimbleOptions.docs(BroadwaySQS.Options.definition())}
 
@@ -174,10 +174,12 @@ defmodule BroadwaySQS.Producer do
 
   @behaviour Producer
 
+  @default_sqs_client BroadwaySQS.ReqClient
+
   @impl true
   def init(opts) do
     receive_interval = opts[:receive_interval]
-    sqs_client = opts[:sqs_client]
+    sqs_client = Keyword.get(opts, :sqs_client, @default_sqs_client)
     {:ok, client_opts} = sqs_client.init(opts)
 
     {:producer,
@@ -193,15 +195,6 @@ defmodule BroadwaySQS.Producer do
   @impl true
   def prepare_for_start(_module, broadway_opts) do
     {producer_module, client_opts} = broadway_opts[:producer][:module]
-
-    if Keyword.has_key?(client_opts, :queue_name) do
-      Logger.error(
-        "The option :queue_name has been removed in order to keep compatibility with " <>
-          "ex_aws_sqs >= v3.0.0. Please set the queue URL using the new :queue_url option."
-      )
-
-      exit(:invalid_config)
-    end
 
     case NimbleOptions.validate(client_opts, BroadwaySQS.Options.definition()) do
       {:error, error} ->

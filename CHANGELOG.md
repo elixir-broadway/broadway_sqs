@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+  * Replace the default `BroadwaySQS.ExAwsClient` with the Req-based
+    `BroadwaySQS.ReqClient`.
+  * Make `BroadwaySQS.ReqClient` as default sqs_client.
+  * Implement the SQS JSON API requests used by Broadway SQS with Req and AWS
+    * `ReceiveMessage`
+    * `DeleteMessageBatch`
+    * `ChangeMessageVisibilityBatch`
+  * Support credentials discovered through `aws_credentials`
+  * Remove the `ex_aws_sqs`, `ex_aws`, `hackney`, and `saxy` dependencies.
+  * Update the documentation and example application to use the Req-based
+    client.
+
+### Breaking changes
+
+  * `BroadwaySQS.ExAwsClient` has been removed. The default client is now
+    `BroadwaySQS.ReqClient`.
+  * ExAws configuration is no longer used. Configure the AWS region with the
+    producer `:config` option, and provide credentials through
+    `aws_credentials` or the producer configuration options.
+  * Applications using `BroadwaySQS.ExAwsClient` directly or relying on
+    `ex_aws` application configuration must migrate to
+    `BroadwaySQS.ReqClient` and the new credential configuration.
+
 ## v0.7.4 (2024-06-21)
 
   * Forward compatibility with Broadway v1.1

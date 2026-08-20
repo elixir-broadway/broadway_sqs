@@ -1,27 +1,25 @@
 defmodule BroadwaySQSExample.Helpers do
   def send_strings_sqs(queue, msg, amount) do
-    sqs_req = ExAws.SQS.send_message(queue, msg)
-
     Enum.each(1..amount, fn _x ->
       Task.async(fn ->
-        ExAws.request(sqs_req, region: "us-east-2")
+        request("AmazonSQS.SendMessage", %{"QueueUrl" => queue, "MessageBody" => msg})
       end)
     end)
   end
 
   def send_ints_sqs(queue, amount) do
     Enum.each(1..amount, fn x ->
-      sqs_req = ExAws.SQS.send_message(queue, x)
-
       Task.async(fn ->
-        ExAws.request(sqs_req, region: "us-east-2")
+        request("AmazonSQS.SendMessage", %{
+          "QueueUrl" => queue,
+          "MessageBody" => to_string(x)
+        })
       end)
     end)
   end
 
   def create_sqs_queue(queue) do
-    sqs_req = ExAws.SQS.create_queue(queue)
-    ExAws.request(sqs_req, region: "us-east-2")
+    request("AmazonSQS.CreateQueue", %{"QueueName" => queue})
   end
 
   def create_default_queues() do
@@ -42,5 +40,17 @@ defmodule BroadwaySQSExample.Helpers do
   def send_strings() do
     string_queue = Application.get_env(:broadway_sqs_example, :string_queue)
     send_strings_sqs(string_queue, "testing", 100)
+  end
+
+  defp request(action, payload) do
+    credentials = :aws_credentials.get_credentials()
+    region = Application.get_env(:broadway_sqs_example, :region, "us-east-2")
+
+    BroadwaySQS.ReqClient.Request.call(action, payload,
+      credentials: credentials,
+      region: region,
+      endpoint: Application.get_env(:broadway_sqs_example, :sqs_endpoint),
+      queue_url: Application.get_env(:broadway_sqs_example, :sqs_endpoint)
+    )
   end
 end
