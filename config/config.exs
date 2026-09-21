@@ -1,3 +1,5 @@
 import Config
 
-import_config "#{config_env()}.exs"
+if config_env() == :test do
+  config :aws_credentials, credential_providers: []
+end
