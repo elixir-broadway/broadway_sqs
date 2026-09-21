@@ -1,7 +1,7 @@
 defmodule BroadwaySqs.MixProject do
   use Mix.Project
 
-  @version "0.7.4"
+  @version "1.0.0"
   @description "A SQS connector for Broadway"
 
   def project do
