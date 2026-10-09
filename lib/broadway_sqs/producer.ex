@@ -168,7 +168,6 @@ defmodule BroadwaySQS.Producer do
 
   use GenStage
 
-  require Logger
   alias Broadway.Producer
   alias NimbleOptions.ValidationError
 
