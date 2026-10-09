@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.1 (2026-10-09)
+
+  * Fix aws signing on Req 0.7.5.
+
 ## v1.0.0 (2026-09-21)
 
 ### Breaking changes
