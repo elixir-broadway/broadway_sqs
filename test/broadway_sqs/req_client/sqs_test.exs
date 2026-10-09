@@ -67,6 +67,31 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
              )
   end
 
+  test "receive_message signs the session token" do
+    queue_url = queue_url()
+
+    Req.Test.expect(__MODULE__, fn conn ->
+      assert Plug.Conn.get_req_header(conn, "x-amz-security-token") == ["session-token"]
+      [authorization] = Plug.Conn.get_req_header(conn, "authorization")
+      assert authorization =~ "x-amz-security-token"
+      Req.Test.json(conn, %{"Messages" => []})
+    end)
+
+    request_options = [
+      region: "eu-west-1",
+      credentials: [
+        access_key_id: "access-key",
+        secret_access_key: "secret-key",
+        token: "session-token"
+      ],
+      endpoint: queue_url,
+      plug: {Req.Test, __MODULE__}
+    ]
+
+    assert {:ok, %{"Messages" => []}} =
+             SQS.receive_message(queue_url, %{max_number_of_messages: 1}, request_options)
+  end
+
   test "delete_message_batch builds the delete payload" do
     queue_url = queue_url()
     entries = [%{"Id" => "1", "ReceiptHandle" => "receipt-1"}]
