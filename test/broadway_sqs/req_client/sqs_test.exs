@@ -70,12 +70,12 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
   test "receive_message signs the session token" do
     queue_url = queue_url()
 
-    Req.Test.expect(__MODULE__, fn conn ->
+    plug = fn conn ->
       assert Plug.Conn.get_req_header(conn, "x-amz-security-token") == ["session-token"]
       [authorization] = Plug.Conn.get_req_header(conn, "authorization")
       assert authorization =~ "x-amz-security-token"
       Req.Test.json(conn, %{"Messages" => []})
-    end)
+    end
 
     request_options = [
       region: "eu-west-1",
@@ -85,7 +85,7 @@ defmodule BroadwaySQS.ReqClient.SQSTest do
         token: "session-token"
       ],
       endpoint: queue_url,
-      plug: {Req.Test, __MODULE__}
+      plug: plug
     ]
 
     assert {:ok, %{"Messages" => []}} =
