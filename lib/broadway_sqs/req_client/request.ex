@@ -43,12 +43,6 @@ defmodule BroadwaySQS.ReqClient.Request do
       {"content-type", @content_type}
     ]
 
-    headers =
-      case credentials[:token] do
-        nil -> headers
-        token -> [{"x-amz-security-token", token} | headers]
-      end
-
     Req.new(
       url: Keyword.get(opts, :endpoint, queue_url),
       plug: Keyword.get(opts, :plug),
@@ -56,6 +50,7 @@ defmodule BroadwaySQS.ReqClient.Request do
       aws_sigv4: [
         access_key_id: credentials[:access_key_id],
         secret_access_key: credentials[:secret_access_key],
+        token: credentials[:token],
         region: region,
         service: :sqs
       ]
