@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+  * `BroadwaySQS.SQSClient.receive_messages/2` may return `{:error, reason}`.
+    `BroadwaySQS.ReqClient` now returns it when a receive request fails, and the
+    `[:broadway_sqs, :receive_messages, :stop]` telemetry event includes
+    `error: reason` in its metadata, so failed receives can be told apart from
+    empty polls. Clients that return a list of messages are unaffected.
+
 ## v1.0.1 (2026-10-09)
 
   * Fix aws signing on Req 0.7.5.

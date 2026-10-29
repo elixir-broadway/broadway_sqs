@@ -26,6 +26,11 @@ defmodule BroadwaySQS.SQSClient do
 
   `opts` is the normalized options returned from `c:init/1`. The `demand`
   argument is the number of messages that the producer is asking for.
+
+  Implementations may return `{:error, reason}` when the request fails. The
+  producer treats it as an empty receive and adds `error: reason` to the
+  `[:broadway_sqs, :receive_messages, :stop]` telemetry metadata.
   """
-  @callback receive_messages(demand :: pos_integer, opts :: any) :: messages
+  @callback receive_messages(demand :: pos_integer, opts :: any) ::
+              messages | {:error, reason :: term}
 end

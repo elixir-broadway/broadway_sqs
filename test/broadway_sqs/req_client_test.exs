@@ -90,7 +90,12 @@ defmodule BroadwaySQS.ReqClientTest do
 
     {:ok, opts} = ReqClient.init(opts(queue_url))
 
-    log = capture_log(fn -> assert ReqClient.receive_messages(1, opts) == [] end)
+    log =
+      capture_log(fn ->
+        assert {:error, {:http_error, 500, %{"message" => "failure"}}} =
+                 ReqClient.receive_messages(1, opts)
+      end)
+
     assert log =~ "Unable to fetch events from AWS queue #{queue_url}"
   end
 
@@ -105,7 +110,10 @@ defmodule BroadwaySQS.ReqClientTest do
     {:ok, opts} =
       ReqClient.init(
         opts(queue_url,
-          config: Keyword.put(@config, :token, "session-token")
+          config:
+            @config
+            |> Keyword.put(:plug, {Req.Test, __MODULE__})
+            |> Keyword.put(:token, "session-token")
         )
       )
 
@@ -118,7 +126,7 @@ defmodule BroadwaySQS.ReqClientTest do
     log =
       capture_log(fn ->
         {:ok, opts} = ReqClient.init(opts(queue_url, config: [region: "eu-west-1"]))
-        assert ReqClient.receive_messages(1, opts) == []
+        assert ReqClient.receive_messages(1, opts) == {:error, :aws_credentials_not_found}
       end)
 
     assert log =~ "aws_credentials_not_found"
@@ -139,7 +147,7 @@ defmodule BroadwaySQS.ReqClientTest do
             )
           )
 
-        assert ReqClient.receive_messages(1, opts) == []
+        assert ReqClient.receive_messages(1, opts) == {:error, :aws_region_not_found}
       end)
 
     assert log =~ "aws_region_not_found"
