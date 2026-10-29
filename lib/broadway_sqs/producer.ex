@@ -148,6 +148,11 @@ defmodule BroadwaySQS.Producer do
         }
         ```
 
+        When the SQS client reports a failed receive (see
+        `c:BroadwaySQS.SQSClient.receive_messages/2`), `messages` is `[]` and the
+        metadata also includes `error: reason`. This lets handlers tell a failed
+        request apart from an empty poll.
+
     * `[:broadway_sqs, :receive_messages, :exception]` - Dispatched after a failure
       while receiving messages from SQS.
 
@@ -275,8 +280,13 @@ defmodule BroadwaySQS.Producer do
       [:broadway_sqs, :receive_messages],
       metadata,
       fn ->
-        messages = client.receive_messages(total_demand, opts)
-        {messages, Map.put(metadata, :messages, messages)}
+        case client.receive_messages(total_demand, opts) do
+          {:error, reason} ->
+            {[], Map.merge(metadata, %{messages: [], error: reason})}
+
+          messages ->
+            {messages, Map.put(metadata, :messages, messages)}
+        end
       end
     )
   end

@@ -50,6 +50,21 @@ defmodule BroadwaySQS.BroadwaySQS.ProducerTest do
     end
   end
 
+  defmodule FailingSQSClient do
+    @behaviour BroadwaySQS.SQSClient
+
+    @impl true
+    def init(opts) do
+      {:ok, opts}
+    end
+
+    @impl true
+    def receive_messages(_amount, opts) do
+      send(opts[:test_pid], :receive_failed)
+      {:error, :aws_region_not_found}
+    end
+  end
+
   defmodule Forwarder do
     use Broadway
 
@@ -678,6 +693,43 @@ defmodule BroadwaySQS.BroadwaySQS.ProducerTest do
     assert_receive {:telemetry_event, [:broadway_sqs, :receive_messages, :stop], %{duration: _},
                     %{messages: _, demand: 10}}
 
+    stop_broadway(pid)
+  end
+
+  test "emit a telemetry stop event with the error when the client fails" do
+    self = self()
+
+    capture_log(fn ->
+      :ok =
+        :telemetry.attach(
+          "stop_error_test",
+          [:broadway_sqs, :receive_messages, :stop],
+          fn name, measurements, metadata, _ ->
+            send(self, {:telemetry_event, name, measurements, metadata})
+          end,
+          nil
+        )
+    end)
+
+    {:ok, pid} =
+      Broadway.start_link(
+        Forwarder,
+        build_broadway_opts(new_unique_name(), [],
+          sqs_client: FailingSQSClient,
+          queue_url: "https://sqs.amazonaws.com/0000000000/my_queue",
+          receive_interval: 0,
+          test_pid: self()
+        )
+      )
+
+    assert_receive {:telemetry_event, [:broadway_sqs, :receive_messages, :stop], %{duration: _},
+                    %{messages: [], demand: 10, error: :aws_region_not_found}}
+
+    # The producer keeps polling after a failed receive.
+    assert_receive :receive_failed
+    assert_receive :receive_failed
+
+    :telemetry.detach("stop_error_test")
     stop_broadway(pid)
   end
 

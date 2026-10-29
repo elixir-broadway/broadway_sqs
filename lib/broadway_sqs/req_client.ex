@@ -36,7 +36,7 @@ defmodule BroadwaySQS.ReqClient do
           "Unable to fetch events from AWS queue #{opts.queue_url}. Reason: #{inspect(reason)}"
         )
 
-        []
+        {:error, reason}
     end
   end
 
