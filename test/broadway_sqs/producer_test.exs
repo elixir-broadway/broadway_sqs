@@ -304,7 +304,7 @@ defmodule BroadwaySQS.BroadwaySQS.ProducerTest do
       assert result_module_opts[:message_attribute_names] == :all
     end
 
-    test ":wait_time_seconds is optional without default value" do
+    test ":wait_time_seconds defaults to 20" do
       assert {[],
               [
                 producer: [
@@ -316,7 +316,7 @@ defmodule BroadwaySQS.BroadwaySQS.ProducerTest do
                  queue_url: "https://sqs.amazonaws.com/0000000000/my_queue"
                )
 
-      refute Keyword.has_key?(result_module_opts, :wait_time_seconds)
+      assert result_module_opts[:wait_time_seconds] == 20
     end
 
     test ":wait_time_seconds should be a non negative integer" do

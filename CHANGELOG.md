@@ -7,6 +7,9 @@
     `[:broadway_sqs, :receive_messages, :stop]` telemetry event includes
     `error: reason` in its metadata, so failed receives can be told apart from
     empty polls. Clients that return a list of messages are unaffected.
+  * Fix `BroadwaySQS.ReqClient` timing out on long polls longer than 15 seconds.
+    The `ReceiveMessage` HTTP receive timeout is now derived from
+    `:wait_time_seconds` (plus a 5 second margin). It also set to 20s by default.
 
 ## v1.0.1 (2026-10-09)
 

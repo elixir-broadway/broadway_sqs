@@ -321,7 +321,8 @@ defmodule BroadwaySQS.ReqClientTest do
 
       assert Jason.decode!(body) == %{
                "QueueUrl" => queue_url,
-               "MaxNumberOfMessages" => 1
+               "MaxNumberOfMessages" => 1,
+               "WaitTimeSeconds" => 10
              }
 
       Req.Test.json(conn, %{"Messages" => []})
@@ -330,7 +331,6 @@ defmodule BroadwaySQS.ReqClientTest do
     {:ok, opts} =
       ReqClient.init(
         opts(queue_url,
-          wait_time_seconds: nil,
           visibility_timeout: nil,
           attribute_names: nil,
           message_attribute_names: nil

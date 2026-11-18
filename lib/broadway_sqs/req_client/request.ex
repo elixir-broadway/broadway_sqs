@@ -7,6 +7,7 @@ defmodule BroadwaySQS.ReqClient.Request do
           credentials: map() | keyword(),
           endpoint: String.t(),
           plug: term(),
+          receive_timeout: timeout(),
           region: String.t(),
           queue_url: String.t()
         ]
@@ -43,7 +44,7 @@ defmodule BroadwaySQS.ReqClient.Request do
       {"content-type", @content_type}
     ]
 
-    Req.new(
+    [
       url: Keyword.get(opts, :endpoint, queue_url),
       plug: Keyword.get(opts, :plug),
       headers: headers,
@@ -54,8 +55,15 @@ defmodule BroadwaySQS.ReqClient.Request do
         region: region,
         service: :sqs
       ]
-    )
+    ]
+    |> put_receive_timeout(Keyword.get(opts, :receive_timeout))
+    |> Req.new()
   end
+
+  defp put_receive_timeout(options, nil), do: options
+
+  defp put_receive_timeout(options, receive_timeout),
+    do: Keyword.put(options, :receive_timeout, receive_timeout)
 
   defp credentials(opts) do
     credentials =
