@@ -15,6 +15,8 @@ defmodule BroadwaySQS.ReqClient do
 
   @max_num_messages_allowed_by_aws 10
 
+  @receive_timeout_margin 5_000
+
   @impl true
   def init(opts) do
     {:ok, Map.put(Map.new(opts), :ack_ref, opts[:broadway][:name])}
@@ -24,7 +26,9 @@ defmodule BroadwaySQS.ReqClient do
   def receive_messages(demand, opts) do
     receive_options = %{opts | max_number_of_messages: min(demand, opts.max_number_of_messages)}
 
-    case SQS.receive_message(opts.queue_url, receive_options, request_options(opts)) do
+    request_options = Keyword.put(request_options(opts), :receive_timeout, receive_timeout(opts))
+
+    case SQS.receive_message(opts.queue_url, receive_options, request_options) do
       {:ok, %{"Messages" => messages}} ->
         wrap_received_messages(messages, opts.ack_ref)
 
@@ -133,6 +137,10 @@ defmodule BroadwaySQS.ReqClient do
 
   defp build_acknowledger(message, ack_ref) do
     {__MODULE__, ack_ref, %{receipt: message.receipt}}
+  end
+
+  defp receive_timeout(opts) do
+    opts.wait_time_seconds * 1_000 + @receive_timeout_margin
   end
 
   defp request_options(opts) do

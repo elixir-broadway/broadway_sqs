@@ -80,6 +80,7 @@ defmodule BroadwaySQS.Options do
           :type_bounded_integer,
           [[{:name, :wait_time_seconds}, {:min, 0}, {:max, 20}]]
         },
+        default: 20,
         doc: """
         The duration (in seconds) for which the call waits
         for a message to arrive in the queue before returning. This value must be
